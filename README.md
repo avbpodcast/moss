@@ -1,4 +1,4 @@
-# MOSS: Manu's Overhand Shuffle Simulator (Prototype 3)
+# MOSS: Manual Overhand Shuffle Simulator (Prototype 3)
 
 A JavaScript implementation of the MOSS algorithm for simulating an overhand card shuffle, supporting arbitrary deck sizes with cryptographically secure randomness, randomized packet drops, and KL divergence scoring.
 
