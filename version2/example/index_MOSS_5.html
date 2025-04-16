@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOSS Card Shuffle</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      width: 100%;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 1.5rem;
+      color: #ffffff;
+      letter-spacing: 1px;
+    }
+
+    button {
+      background: #ff6200;
+      color: #000;
+      border: none;
+      padding: 12px 24px;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.1s;
+      margin-bottom: 1.5rem;
+    }
+
+    button:hover {
+      background: #e55a00;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .result {
+      background: #2a2a2a;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      transition: transform 0.3s;
+    }
+
+    .result:hover {
+      transform: translateY(-2px);
+    }
+
+    .result p {
+      font-size: 1rem;
+      line-height: 1.6;
+    }
+
+    .result .cards {
+      font-weight: 600;
+      color: #ff6200;
+    }
+
+    .result .score, .result .metric, .result .correlation {
+      color: #4caf50;
+    }
+
+    .result .stats {
+      color: #b0b0b0;
+    }
+
+    .log {
+      background: #2a2a2a;
+      border-radius: 12px;
+      padding: 1rem;
+      max-height: 150px;
+      overflow-y: auto;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: #b0b0b0;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    @media (max-width: 500px) {
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      button {
+        padding: 10px 20px;
+        font-size: 0.9rem;
+      }
+
+      .result {
+        padding: 1rem;
+      }
+
+      .result p {
+        font-size: 0.9rem;
+      }
+
+      .log {
+        font-size: 0.8rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>MOSS Card Shuffle</h1>
+    <button onclick="shuffle()">Shuffle Deck</button>
+    <div class="result" id="result">
+      <p>Click "Shuffle Deck" to mix the cards.</p>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <script>
+    // Global counters
+    let totalCuts = 0;
+    let totalShuffles = 0;
+    let totalErrors = 0;
+
+    // Create a standard 52-card deck
+    function createDeck() {
+      const suits = ["♠", "♥", "♦", "♣"];
+      const ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+      const deck = [];
+      for (let suit of suits) {
+        for (let rank of ranks) {
+          deck.push(rank + suit);
+        }
+      }
+      return deck;
+    }
+
+    // Compute KL divergence score for randomness quality
+    function computeKLScore(before, after) {
+      const n = 52;
+      const numBins = 8;
+      const binSize = n / numBins;
+      const observed = new Array(numBins).fill(0);
+      for (let i = 0; i < n; i++) {
+        const card = before[i];
+        const newIndex = after.indexOf(card);
+        observed[Math.floor(newIndex / binSize)]++;
+      }
+      for (let i = 0; i < numBins; i++) {
+        observed[i] /= n;
+      }
+      let score = 0;
+      for (let p of observed) {
+        if (p > 0) score += p * Math.log(p * numBins);
+      }
+      return Math.max(0, score);
+    }
+
+    // Compute average position change
+    function computePositionChange(before, after) {
+      let totalChange = 0;
+      for (let i = 0; i < 52; i++) {
+        const card = before[i];
+        const newIndex = after.indexOf(card);
+        totalChange += Math.abs(newIndex - i);
+      }
+      return totalChange / 52;
+    }
+
+    // Compute Spearman's rank correlation
+    function computeSpearmanCorrelation(before, after) {
+      const n = 52;
+      const ranksBefore = new Array(n);
+      const ranksAfter = new Array(n);
+      for (let i = 0; i < n; i++) {
+        ranksBefore[before[i]] = i;
+        ranksAfter[after[i]] = i;
+      }
+      let sumDiffSquared = 0;
+      for (let i = 0; i < n; i++) {
+        const diff = ranksBefore[before[i]] - ranksAfter[before[i]];
+        sumDiffSquared += diff * diff;
+      }
+      return 1 - (6 * sumDiffSquared) / (n * (n * n - 1));
+    }
+
+    // MOSS shuffle algorithm with counters
+    async function mossShuffle(deck) {
+      let result = [...deck];
+      const N = 52;
+      const randomBytes = new Uint8Array(200);
+      crypto.getRandomValues(randomBytes);
+      let byteIndex = 0;
+      let sequenceCount = 0;
+      let cutCount = 0;
+
+      const numSequences = 10 + (randomBytes[byteIndex++] % 13); // 10–22 sequences
+      sequenceCount += numSequences;
+
+      for (let i = 0; i < numSequences; i++) {
+        const splitSize = 26 + (randomBytes[byteIndex++] % 16); // Left: 26–41, Right: 11–26
+        let leftHand = result.slice(0, N - splitSize);
+        let rightHand = result.slice(N - splitSize);
+        const rightSize = rightHand.length;
+        const minPacketSize = Math.ceil(rightSize * 0.125); // 2–4
+        const maxPacketSize = Math.floor(rightSize * 0.333); // 3–8
+        while (rightHand.length > 0) {
+          if (rightHand.length < 6) {
+            leftHand = [...rightHand.reverse(), ...leftHand];
+            rightHand = [];
+          } else {
+            const packetSize = minPacketSize + (randomBytes[byteIndex++] % (maxPacketSize - minPacketSize + 1));
+            const packet = rightHand.slice(0, packetSize);
+            leftHand = [...packet.reverse(), ...leftHand];
+            rightHand.splice(0, packetSize);
+          }
+        }
+        result = [...leftHand];
+        const cutSize = 4 + (randomBytes[byteIndex++] % 47); // 4–50 cards
+        result = [...result.slice(cutSize), ...result.slice(0, cutSize)];
+        cutCount++;
+      }
+
+      if (result.length !== 52 || new Set(result).size !== 52) {
+        totalErrors++;
+        logMessage("Error: Invalid shuffle output");
+        return deck;
+      }
+
+      totalShuffles += sequenceCount;
+      totalCuts += cutCount;
+      return result;
+    }
+
+    // Log messages to the log area
+    function logMessage(message) {
+      const log = document.getElementById("log");
+      const timestamp = new Date().toLocaleTimeString();
+      log.innerHTML += `[${timestamp}] ${message}\n`;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    // Handle shuffle button click
+    async function shuffle() {
+      const resultDiv = document.getElementById("result");
+      const button = document.querySelector("button");
+      button.disabled = true;
+      resultDiv.innerHTML = "<p>Shuffling...</p>";
+      logMessage("Shuffling 52-card deck...");
+
+      try {
+        const deck = createDeck();
+        const shuffledDeck = await mossShuffle(deck);
+        const klScore = computeKLScore(deck, shuffledDeck);
+        const quality = klScore < 0.05 ? "excellent" : klScore < 0.1 ? "good" : klScore < 0.3 ? "passable" : "weak";
+        const positionChange = computePositionChange(deck, shuffledDeck);
+        const spearman = computeSpearmanCorrelation(deck, shuffledDeck);
+
+        let similarity;
+        if (spearman > 0.5) {
+          similarity = "highly similar";
+        } else if (spearman > 0.2) {
+          similarity = "moderately similar";
+        } else if (spearman > -0.2) {
+          similarity = "dissimilar";
+        } else {
+          similarity = "highly dissimilar";
+        }
+
+        resultDiv.innerHTML = `
+          <p>Top 5 cards: <span class="cards">${shuffledDeck.slice(0, 5).join(", ")}</span></p>
+          <p>Randomness: <span class="score">${klScore.toFixed(3)} (${quality})</span></p>
+          <p>Avg. Position Change: <span class="metric">${positionChange.toFixed(1)} positions</span></p>
+          <p>Order Similarity: <span class="correlation">${spearman.toFixed(3)} (${similarity})</span></p>
+          <p class="stats">Shuffles: ${totalShuffles} | Cuts: ${totalCuts} | Errors: ${totalErrors}</p>
+        `;
+        logMessage(`Shuffle complete. KL Score: ${klScore.toFixed(3)} (${quality})`);
+        logMessage(`Position Change: ${positionChange.toFixed(1)}, Spearman: ${spearman.toFixed(3)} (${similarity})`);
+        logMessage(`Stats: Shuffles=${totalShuffles}, Cuts=${totalCuts}, Errors=${totalErrors}`);
+      } catch (error) {
+        totalErrors++;
+        resultDiv.innerHTML = "<p>Error during shuffle.</p>";
+        logMessage(`Error: ${error.message}`);
+      }
+
+      button.disabled = false;
+    }
+  </script>
+</body>
+</html>
