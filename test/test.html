@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MOSS Prototype 3 Test</title>
+    <style>
+        body {
+            font-family: Consolas, "Courier New", monospace;
+            background: #2a2a2a;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #ffffff;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            background: #333333;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        input, button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: none;
+            border-radius: 5px;
+            font-family: Consolas, "Courier New", monospace;
+        }
+        input {
+            background: #555;
+            color: #e0e0e0;
+            width: 100px;
+        }
+        button {
+            cursor: pointer;
+            background-color: #E07B00;
+            color: #000000;
+            font-weight: bold;
+        }
+        button:disabled {
+            background-color: #A3855B;
+            cursor: not-allowed;
+        }
+        button:hover:not(:disabled) {
+            background-color: #C66C00;
+        }
+        .log {
+            width: 100%;
+            max-width: 800px;
+            height: 200px;
+            background: #3a3a3a;
+            border: 1px solid #555;
+            padding: 10px;
+            font-size: 14px;
+            line-height: 1.5;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            color: #d0d0d0;
+        }
+        .log span.bold {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>MOSS Prototype 3 Test</h1>
+    <div class="controls">
+        <input type="number" id="deckSize" value="52" min="2" placeholder="Deck Size">
+        <button id="shuffleButton">Shuffle</button>
+    </div>
+    <div id="log" class="log"></div>
+
+    <script type="module">
+        import { MOSS, createDeck } from '../src/moss.js';
+
+        const logElement = document.getElementById('log');
+        let isShuffling = false;
+
+        // Custom logger for HTML
+        function logMessage(message) {
+            logElement.innerHTML += `${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        // Shuffle handler
+        async function shuffle() {
+            if (isShuffling) return;
+            isShuffling = true;
+            const shuffleButton = document.getElementById('shuffleButton');
+            shuffleButton.disabled = true;
+
+            const deckSize = parseInt(document.getElementById('deckSize').value) || 52;
+            logMessage(`Creating deck of ${deckSize} cards...`);
+
+            try {
+                const deck = createDeck(deckSize);
+                logMessage(`Initial deck (first 5): ${deck.slice(0, Math.min(5, deckSize)).join(", ")}`);
+                const result = await MOSS(deck, `test-deck-${deckSize}`, { logMessage });
+                logMessage(`Shuffled deck (first 5): ${result.slice(0, Math.min(5, deckSize)).join(", ")}`);
+            } catch (error) {
+                logMessage(`Error: ${error.message}`);
+            }
+
+            shuffleButton.disabled = false;
+            isShuffling = false;
+        }
+
+        // Initialize
+        document.getElementById('shuffleButton').addEventListener('click', shuffle);
+        logMessage('MOSS Prototype 3 Test Loaded');
+    </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "moss",
+  "version": "1.0.0",
+  "description": "Manu's Overhand Shuffle Simulator (MOSS) Prototype 3",
+  "type": "module",
+  "scripts": {
+    "test": "node test/test.js",
+    "example": "node examples/node-example.js"
+  },
+  "keywords": ["shuffle", "cards", "random", "cryptography"],
+  "author": "AVBpodcast",
+  "license": "MIT"
+}
